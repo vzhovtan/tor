@@ -1,26 +1,12 @@
-conf t
-  no ipv6 access-list custom-copp-acl-tacacs6
-  ipv6 access-list custom-copp-acl-tacacs6
-    permit tcp any any eq 2832
-    permit tcp any eq 2832 any
-  class-map type control-plane match-any custom-copp-class-management
-   no match access-group name custom-copp-acl-tacacs
-   no match access-group name custom-copp-acl-radius
-   no match access-group name custom-copp-acl-radius6
-   match access-group name custom-copp-acl-tacacs6
- exit
- control-plane
-     service-policy input custom-copp-policy-strict
-
 hostname {{ .Device_id }}
 cli alias name wr copy running-config startup-config
 system vlan long-name
 vdc {{ .Device_id }} id 1
-  limit-resource vlan minimum 16 maximum 4094
-  limit-resource vrf minimum 2 maximum 4096
-  limit-resource port-channel minimum 0 maximum 511
-  limit-resource m4route-mem minimum 58 maximum 58
-  limit-resource m6route-mem minimum 8 maximum 8
+limit-resource vlan minimum 16 maximum 4094
+limit-resource vrf minimum 2 maximum 4096
+limit-resource port-channel minimum 0 maximum 511
+limit-resource m4route-mem minimum 58 maximum 58
+limit-resource m6route-mem minimum 8 maximum 8
 
 feature bash-shell
 feature scp-server
@@ -43,9 +29,9 @@ clock timezone PST -8 0
 clock summer-time PDT 2 Sun Mar 02:00 1 Sun Nov 02:00 60
 
 archive
-  path bootflash:startup-config
-  time-period 0
-  maximum 14
+path bootflash:startup-config
+time-period 0
+maximum 14
 
 ngoam install acl
 
@@ -104,21 +90,21 @@ tacacs-server host AAAA:BBBB:CCCC::1 port 2832
 tacacs-server host AAAA:BBBB:CCCC::2 port 2832
 tacacs-server host AAAA:BBBB:CCCC::3 port 2832
 aaa group server tacacs+ TacServer
-    server AAAA:BBBB:CCCC::1
-    server AAAA:BBBB:CCCC::2
-    server AAAA:BBBB:CCCC::3
+  server AAAA:BBBB:CCCC::1
+  server AAAA:BBBB:CCCC::2
+  server AAAA:BBBB:CCCC::3
 {{else}}
 {{if .Management_ip }}
 tacacs-server host 192.168.101.1 port 2832
 tacacs-server host 192.168.101.2 port 2832
 tacacs-server host 192.168.101.3 port 2832
 aaa group server tacacs+ TacServer
-    server 192.168.101.1
-    server 192.168.101.2
-    server 192.168.101.3
+  server 192.168.101.1
+  server 192.168.101.2
+  server 192.168.101.3
 {{end}}
 {{end}}
-    source-interface loopback0
+  source-interface loopback0
 
 aaa authentication login default group TacServer local
 aaa authentication login console local

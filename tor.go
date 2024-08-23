@@ -2,6 +2,7 @@ package tor
 
 import (
 	"io"
+	"log"
 	"os"
 	"text/template"
 )
@@ -43,7 +44,10 @@ type Device struct {
 
 func Main() {
 	dev := BuildDevice()
-	BuildConfig(os.Stdout, dev)
+	err := BuildConfig(os.Stdout, dev)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func BuildDevice() *Device {
@@ -62,7 +66,6 @@ func BuildDevice() *Device {
 		Asn_id:      "6530_TEST",
 		Rd_id:       "123:456",
 	}
-
 	l3 := L3info{
 		Neighbor_id:   "TEST_NE_ID",
 		Neighbor_desc: "TEST_NE_DESCR",
@@ -84,14 +87,15 @@ func BuildDevice() *Device {
 		},
 	}
 }
-func BuildConfig(out io.Writer, dev *Device) {
+
+func BuildConfig(out io.Writer, dev *Device) error {
 	t, err := template.ParseFiles("conf.tmpl")
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	err = t.Execute(os.Stdout, dev)
+	err = t.Execute(out, dev)
 	if err != nil {
-		panic(err)
+		return err
 	}
+	return nil
 }

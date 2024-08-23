@@ -1,7 +1,9 @@
 package tor_test
 
 import (
+	"bytes"
 	"github/vzhovtan/tor"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -29,12 +31,12 @@ var TestL3 = tor.L3info{
 	Neighbor_desc: "TEST_NE_DESCR",
 }
 
-var testDeviceResult = tor.Device{
+var TestDeviceResult = tor.Device{
 	Device_id:        "TEST_DEVICE_ID",
 	Management_ipv6:  "2001:22:22:22",
 	Management_ip:    "10.10.10.10",
-	Network_password: "PW TACACS_KEY",
-	Tacacs_key:       "PW TACACS_KEY",
+	Network_password: "PW",
+	Tacacs_key:       "TACACS_KEY",
 	Bootstrap:        false,
 	Snmp_community:   "TEST_COMMUNITY",
 	Base:             TestBase,
@@ -46,29 +48,16 @@ var testDeviceResult = tor.Device{
 	},
 }
 
-var testFullResult = `conf t
-  no ipv6 access-list custom-copp-acl-tacacs6
-  ipv6 access-list custom-copp-acl-tacacs6
-    permit tcp any any eq 2832
-    permit tcp any eq 2832 any
-  class-map type control-plane match-any custom-copp-class-management
-   no match access-group name custom-copp-acl-tacacs
-   no match access-group name custom-copp-acl-radius
-   no match access-group name custom-copp-acl-radius6
-   match access-group name custom-copp-acl-tacacs6
- exit
- control-plane
-     service-policy input custom-copp-policy-strict
-
+var TestResult = `
 hostname TEST_DEVICE_ID
 cli alias name wr copy running-config startup-config
 system vlan long-name
 vdc TEST_DEVICE_ID id 1
-  limit-resource vlan minimum 16 maximum 4094
-  limit-resource vrf minimum 2 maximum 4096
-  limit-resource port-channel minimum 0 maximum 511
-  limit-resource m4route-mem minimum 58 maximum 58
-  limit-resource m6route-mem minimum 8 maximum 8
+limit-resource vlan minimum 16 maximum 4094
+limit-resource vrf minimum 2 maximum 4096
+limit-resource port-channel minimum 0 maximum 511
+limit-resource m4route-mem minimum 58 maximum 58
+limit-resource m6route-mem minimum 8 maximum 8
 
 feature bash-shell
 feature scp-server
@@ -91,16 +80,15 @@ clock timezone PST -8 0
 clock summer-time PDT 2 Sun Mar 02:00 1 Sun Nov 02:00 60
 
 archive
-  path bootflash:startup-config
-  time-period 0
-  maximum 14
+path bootflash:startup-config
+time-period 0
+maximum 14
 
 ngoam install acl
 
 ip domain-lookup
 ip domain-name net.google.com
 ip name-server 2001:AAAA:BBBB::8888 2001:AAAA:BBBB::8844
-
 
 system default switchport
 system jumbomtu 9000
@@ -119,7 +107,6 @@ snmp-server counter cache timeout 10
 snmp-server packetsize 1400
 snmp-server globalEnforcePriv
 snmp-server user netops network-operator auth sha TEST_COMMUNITY priv aes-128 TEST_COMMUNITY
-
 
 ntp server AAAA:BBBB:CCCC::1 use-vrf default
 ntp server 2001:AAAA:BBBB::4 use-vrf default
@@ -143,11 +130,11 @@ tacacs-server host AAAA:BBBB:CCCC::1 port 2832
 tacacs-server host AAAA:BBBB:CCCC::2 port 2832
 tacacs-server host AAAA:BBBB:CCCC::3 port 2832
 aaa group server tacacs+ TacServer
-    server AAAA:BBBB:CCCC::1
-    server AAAA:BBBB:CCCC::2
-    server AAAA:BBBB:CCCC::3
+	server AAAA:BBBB:CCCC::1
+	server AAAA:BBBB:CCCC::2
+	server AAAA:BBBB:CCCC::3
 
-    source-interface loopback0
+	source-interface loopback0
 
 aaa authentication login default group TacServer local
 aaa authentication login console local
@@ -161,9 +148,9 @@ aaa authentication login error-enable
 
 route-map RM-PERMIT permit 10
 route-map RM-REDIST-DIRECT permit 10
-  set community 65203:5 additive
+	set community 65203:5 additive
 route-map RM-REDIST-STATIC permit 10
-  set community 65203:5 additive
+	set community 65203:5 additive
 
 service dhcp
 ip dhcp relay
@@ -171,8 +158,6 @@ ipv6 dhcp relay
 
 vrf context management
 system nve peer-vni-counter
-
-
 
 interface Ethernet111
 description TEST_DESCRIPTION
@@ -188,8 +173,6 @@ ipv6 router isis underlay
 no isis passive-interface level-2
 no shutdown
 
-
-
 interface nve1
 description NVE
 no shutdown
@@ -204,7 +187,6 @@ ip router isis underlay
 
 ipv6 address 2001:22:22:22
 ipv6 router isis underlay
-
 
 interface loopback1
 description IGP/BGP
@@ -222,51 +204,55 @@ ip address 3.3.3.3
 ip router isis underlay
 
 line console
-  exec-timeout 180
+	exec-timeout 180
 line vty
 
 router isis underlay
-  net ISO-ID_TEST
-  is-type level-2
-  address-family ipv4 unicast
-    bfd
-  address-family ipv6 unicast
-    bfd
-    multi-topology
-  passive-interface default level-1-2
+	net ISO-ID_TEST
+	is-type level-2
+	address-family ipv4 unicast
+		bfd
+	address-family ipv6 unicast
+		bfd
+		multi-topology
+	passive-interface default level-1-2
 
 router bgp 6530_TEST
 router-id 123:456
 log-neighbor-changes
-  address-family l2vpn evpn
-    maximum-paths ibgp 8
-  template peer FABRIC-SPINE
-    bfd
-    remote-as 6530_TEST
-    update-source loopback1
-    address-family l2vpn evpn
-      send-community
-      send-community extended
+	address-family l2vpn evpn
+		maximum-paths ibgp 8
+	template peer FABRIC-SPINE
+		bfd
+		remote-as 6530_TEST
+		update-source loopback1
+		address-family l2vpn evpn
+			send-community
+			send-community extended
 
-  neighbor TEST_NE_ID
-    description TEST_NE_DESCR
-    inherit peer FABRIC-SPINE`
+	neighbor TEST_NE_ID
+		description TEST_NE_DESCR
+		inherit peer FABRIC-SPINE
+`
 
 func TestBuildDevice(t *testing.T) {
 	dev := tor.BuildDevice()
-	if !cmp.Equal(dev, testDeviceResult) {
+	if !cmp.Equal(*dev, TestDeviceResult) {
 		t.Errorf("test BuildDevice Failed - error")
 	}
 }
 
-// func TestBuildConfig(t *testing.T) {
-// 	out := new(bytes.Buffer)
-// 	deviceResult := tor.BuildConfig(out, dev)
-// 	if err != nil {
-// 		t.Errorf("test TreeDir Failed - error")
-// 	}
-// 	result := out.String()
-// 	if result != testDirResult {
-// 		t.Errorf("test TreeDir Failed - results not match\nGot:\n%v\nExpected:\n%v\n", result, testDirResult)
-// 	}
-// }
+func TestBuildConfig(t *testing.T) {
+	out := new(bytes.Buffer)
+	dev := tor.BuildDevice()
+	err := tor.BuildConfig(out, dev)
+	if err != nil {
+		t.Errorf("test BuildConfig Failed - error")
+	}
+	re := regexp.MustCompile(`\n|\s`)
+	exp := re.ReplaceAll([]byte(TestResult), []byte(""))
+	got := re.ReplaceAll(out.Bytes(), []byte(""))
+	if !cmp.Equal(exp, got) {
+		t.Errorf("test BuildConfig Failed - results not match\nGot:\n%v\nExpected:\n%v\n", string(got), string(exp))
+	}
+}
